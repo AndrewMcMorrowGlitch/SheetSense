@@ -1,6 +1,9 @@
 import os
+from typing import Dict, List
+
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 # Path to your service account key file
 SERVICE_ACCOUNT_FILE = 'sheetsense-477619-ad0eb7d32908.json'
@@ -55,6 +58,63 @@ def discover_google_sheets():
     except Exception as e:
         print(f"Error discovering sheets: {e}")
         return []
+
+
+def get_sheet_tabs_and_a1(spreadsheet_id: str) -> List[Dict[str, str]]:
+    """Return each subsheet title and the value stored in its A1 cell."""
+    sheets_service = create_sheets_service()
+
+    try:
+        spreadsheet = sheets_service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id
+        ).execute()
+    except HttpError as exc:
+        raise RuntimeError(f"Unable to read spreadsheet metadata: {exc}") from exc
+
+    result: List[Dict[str, str]] = []
+    for sheet in spreadsheet.get("sheets", []):
+        sheet_props = sheet.get("properties", {})
+        title = sheet_props.get("title", "Untitled")
+        range_name = f"{title}!A1"
+
+        try:
+            response = sheets_service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=range_name
+            ).execute()
+        except HttpError as exc:
+            raise RuntimeError(f"Unable to read range {range_name}: {exc}") from exc
+
+        values = response.get("values", [])
+        a1_value = values[0][0] if values and values[0] else ""
+        result.append({
+            "title": title,
+            "sheetId": sheet_props.get("sheetId"),
+            "a1_value": a1_value
+        })
+
+    return result
+
+
+def list_subsheets(spreadsheet_id: str) -> List[Dict[str, str]]:
+    """Expose subsheet metadata (title + A1 value) for a spreadsheet."""
+    try:
+        return get_sheet_tabs_and_a1(spreadsheet_id)
+    except Exception as exc:
+        print(f"Error listing subsheets: {exc}")
+        return []
+
+
+def format_subsheet_summary(subsheets: List[Dict[str, str]]) -> str:
+    """Format a human-readable summary for subsheet metadata."""
+    if not subsheets:
+        return "No subsheets found."
+
+    lines = []
+    for sheet in subsheets:
+        value_display = sheet["a1_value"] if sheet["a1_value"] else "[empty]"
+        lines.append(f"- {sheet['title']}: {value_display}")
+    return "\n".join(lines)
 
 def read_sheet_sample(spreadsheet_id, sheet_name=None):
     """Read a sample of data from a specific sheet"""
@@ -198,31 +258,39 @@ class SheetsAgent:
         # Configure Gemini API
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
         self.model = genai.GenerativeModel('gemini-2.5-pro')
-        
-        # Get available sheets
+
         self.sheets = discover_google_sheets()
+        self.default_sheet_id = None
+        self.default_sheet_name = None
+        self.subsheet_cache: List[Dict[str, str]] = []
+
         if self.sheets:
             self.default_sheet_id = self.sheets[0]['id']
-            self.default_sheet_name = "Data"  # Default to Data sheet
-        else:
-            self.default_sheet_id = None
-            self.default_sheet_name = None
+            self._refresh_subsheet_cache()
+            if self.subsheet_cache:
+                self.default_sheet_name = self.subsheet_cache[0]['title']
     
     def execute_command(self, user_prompt):
         """Execute a natural language command on Google Sheets"""
         if not self.default_sheet_id:
             return "❌ No Google Sheets found. Please share a sheet with the service account first."
-        
+
+        available_sheet_names = ", ".join(
+            sheet["title"] for sheet in self.subsheet_cache
+        ) if self.subsheet_cache else "None"
+
         # Create function calling prompt
         system_prompt = f"""You are a Google Sheets agent. You have access to these functions:
 
-1. write_cell(cell, value) - Write a value to a specific cell (e.g., "A1", "B5")
-2. read_range(range_cells) - Read data from a range (e.g., "A1:C10", "A:A")  
-3. append_row(data) - Add a new row with data as a list
-4. find_replace(find_text, replace_text) - Replace all occurrences of text
+1. write_cell(cell, value, sheet_name optional) - Write a value to a specific cell (e.g., "A1", "B5")
+2. read_range(range_cells, sheet_name optional) - Read data from a range (e.g., "A1:C10", "A:A")  
+3. append_row(data, sheet_name optional) - Add a new row with data as a list
+4. find_replace(find_text, replace_text, sheet_name optional) - Replace all occurrences of text
+5. list_subsheets() - Return every sheet tab name plus the value in cell A1
 
 Current sheet: "{self.sheets[0]['name']}" (ID: {self.default_sheet_id})
-Sheet name: "{self.default_sheet_name}"
+Default subsheet: "{self.default_sheet_name}"
+Available subsheets: {available_sheet_names}
 
 Based on the user's request, determine which function to call and with what parameters.
 Return ONLY a JSON object with the function call, like:
@@ -257,50 +325,81 @@ User request: {user_prompt}"""
         """Execute the parsed function call"""
         func_name = command.get("function")
         params = command.get("params", {})
+
+        def resolve_sheet_name():
+            sheet_name = params.get("sheet_name")
+            if sheet_name:
+                if not any(sheet["title"] == sheet_name for sheet in self.subsheet_cache):
+                    self._refresh_subsheet_cache()
+                    if not any(sheet["title"] == sheet_name for sheet in self.subsheet_cache):
+                        raise ValueError(f"Sheet '{sheet_name}' not found.")
+                return sheet_name
+            if self.default_sheet_name:
+                return self.default_sheet_name
+            raise ValueError("No default subsheet available. Please list subsheets first.")
         
         try:
             if func_name == "write_cell":
+                target_sheet = resolve_sheet_name()
                 result = write_cell(
                     self.default_sheet_id, 
-                    self.default_sheet_name, 
+                    target_sheet, 
                     params["cell"], 
                     params["value"]
                 )
-                return f"✅ Successfully wrote '{params['value']}' to cell {params['cell']}"
+                return f"✅ Successfully wrote '{params['value']}' to cell {target_sheet}!{params['cell']}"
             
             elif func_name == "read_range":
+                target_sheet = resolve_sheet_name()
                 result = read_range(
                     self.default_sheet_id, 
-                    self.default_sheet_name, 
+                    target_sheet, 
                     params["range_cells"]
                 )
                 if result:
-                    return f"✅ Data from {params['range_cells']}:\n" + "\n".join([str(row) for row in result[:10]])
+                    return (
+                        f"✅ Data from {target_sheet}!{params['range_cells']}:\n"
+                        + "\n".join([str(row) for row in result[:10]])
+                    )
                 else:
                     return "❌ No data found in that range"
             
             elif func_name == "append_row":
+                target_sheet = resolve_sheet_name()
                 result = append_row(
                     self.default_sheet_id, 
-                    self.default_sheet_name, 
+                    target_sheet, 
                     params["data"]
                 )
-                return f"✅ Successfully added new row with data: {params['data']}"
+                return f"✅ Successfully added new row to {target_sheet} with data: {params['data']}"
             
             elif func_name == "find_replace":
+                target_sheet = resolve_sheet_name()
                 result = find_replace(
                     self.default_sheet_id, 
-                    self.default_sheet_name, 
+                    target_sheet, 
                     params["find_text"], 
                     params["replace_text"]
                 )
                 return f"✅ Replaced {result} occurrences of '{params['find_text']}' with '{params['replace_text']}'"
-            
+            elif func_name == "list_subsheets":
+                subsheets = list_subsheets(self.default_sheet_id)
+                self.subsheet_cache = subsheets
+                if subsheets and not self.default_sheet_name:
+                    self.default_sheet_name = subsheets[0]["title"]
+                summary = format_subsheet_summary(subsheets)
+                return "✅ Subsheet overview:\n" + summary
             else:
                 return f"❌ Unknown function: {func_name}"
                 
         except Exception as e:
             return f"❌ Error executing {func_name}: {str(e)}"
+
+    def _refresh_subsheet_cache(self):
+        if not self.default_sheet_id:
+            self.subsheet_cache = []
+            return
+        self.subsheet_cache = list_subsheets(self.default_sheet_id)
 
 def chat_interface():
     """Simple chat interface for testing the agent"""
@@ -312,6 +411,7 @@ def chat_interface():
     print("   - 'Show me the data in A1:E5'") 
     print("   - 'Add a new employee row with John, Doe, Developer'")
     print("   - 'Replace all Manager with Director'")
+    print("   - 'List all tabs' or 'Use the Summary sheet'")
     print("   - Type 'quit' to exit\n")
     
     while True:
@@ -336,6 +436,9 @@ if __name__ == "__main__":
     # If sheets found, offer to start the agent
     if sheets:
         print(f"\nFound sheet: '{sheets[0]['name']}'")
+        subsheets = list_subsheets(sheets[0]['id'])
+        print("\nAvailable subsheets:")
+        print(format_subsheet_summary(subsheets))
         print("\n🤖 Starting SheetSense Agent...")
         chat_interface()
     else:

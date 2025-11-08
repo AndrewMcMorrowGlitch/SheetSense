@@ -1,18 +1,31 @@
 import os
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from dotenv import load_dotenv
 
-load_dotenv()
+# Path to your service account key file
+SERVICE_ACCOUNT_FILE = 'sheetsense-477619-ad0eb7d32908.json'
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# Scopes required for Google Sheets and Drive APIs
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
 
 def create_drive_service():
     """Create Google Drive API service"""
-    return build('drive', 'v3', developerKey=GOOGLE_API_KEY)
+    credentials = Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, 
+        scopes=SCOPES
+    )
+    return build('drive', 'v3', credentials=credentials)
 
 def create_sheets_service():
     """Create Google Sheets API service"""
-    return build('sheets', 'v4', developerKey=GOOGLE_API_KEY)
+    credentials = Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, 
+        scopes=SCOPES
+    )
+    return build('sheets', 'v4', credentials=credentials)
 
 def discover_google_sheets():
     """Discover all Google Sheets in your Drive"""
@@ -43,7 +56,7 @@ def discover_google_sheets():
         print(f"Error discovering sheets: {e}")
         return []
 
-def read_sheet_sample(spreadsheet_id, sheet_name="Sheet1"):
+def read_sheet_sample(spreadsheet_id, sheet_name=None):
     """Read a sample of data from a specific sheet"""
     try:
         sheets_service = create_sheets_service()
@@ -55,8 +68,16 @@ def read_sheet_sample(spreadsheet_id, sheet_name="Sheet1"):
         
         print(f"Spreadsheet: {metadata['properties']['title']}")
         print("Available sheets:")
+        available_sheets = []
         for sheet in metadata['sheets']:
-            print(f"  - {sheet['properties']['title']}")
+            sheet_title = sheet['properties']['title']
+            print(f"  - {sheet_title}")
+            available_sheets.append(sheet_title)
+        
+        # Use first sheet if no sheet name specified
+        if sheet_name is None:
+            sheet_name = available_sheets[0]
+            print(f"Using first sheet: {sheet_name}")
         
         # Read data from specified sheet
         range_name = f"{sheet_name}!A1:Z10"  # Read first 10 rows

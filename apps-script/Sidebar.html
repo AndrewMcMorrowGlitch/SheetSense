@@ -2,481 +2,371 @@
 <html>
 <head>
   <base target="_top">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    :root {
+      --bg: #0b1220;             /* deep slate */
+      --bg-soft: #0e1628;         /* softer panel bg */
+      --panel: rgba(255,255,255,0.06);
+      --panel-solid: #0f172a;
+      --text: #e5e7eb;            /* gray-200 */
+      --muted: #94a3b8;           /* slate-400 */
+      --border: rgba(148,163,184,0.18);
+      --primary: #22d3ee;         /* cyan-400 */
+      --primary-600: #06b6d4;     /* cyan-500 */
+      --accent: #a78bfa;          /* violet-400 */
+      --danger: #f43f5e;          /* rose-500 */
+      --success: #22c55e;         /* green-500 */
+      --shadow: 0 8px 24px rgba(2, 6, 23, 0.45);
+      --glow: 0 0 0 1px rgba(34,211,238,0.25), 0 8px 28px rgba(34,211,238,0.15);
     }
 
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
     body {
-      font-family: 'Google Sans', 'Segoe UI', Tahoma, sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin: 0;
+      background:
+        radial-gradient(1200px 500px at 80% -10%, rgba(167,139,250,0.2), transparent 50%),
+        radial-gradient(1000px 600px at -10% 110%, rgba(34,211,238,0.18), transparent 40%),
+        var(--bg);
+      color: var(--text);
+      letter-spacing: -0.01em;
+      overflow: hidden; /* prevent body scroll; we scroll the chat container */
+      position: relative;
+    }
+
+    /* Absolute wrapper avoids quirky vh behavior inside Sheets sidebar iframe */
+    .layout {
+      position: absolute;
+      inset: 0;
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      background: #ffffff;
-      color: #202124;
-      overflow: hidden;
+      min-height: 0; /* allow children with overflow to size correctly */
     }
 
     .header {
-      background: #fff;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e8eaed;
-      flex-shrink: 0;
+      background: linear-gradient(180deg, rgba(15,23,42,0.9), rgba(15,23,42,0.6));
+      color: white;
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: relative;
+      overflow: hidden;
+    }
+    .header::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(600px 120px at -10% -40%, rgba(167,139,250,0.22), transparent 60%);
+      pointer-events: none;
     }
 
-    .header-title {
-      font-size: 16px;
-      font-weight: 500;
-      color: #202124;
+    .brand {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .header-subtitle {
-      font-size: 12px;
-      color: #5f6368;
-      margin-top: 4px;
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      color: #0b1220;
+      background: linear-gradient(180deg, #a5b4fc, #818cf8);
+      padding: 2px 6px;
+      border-radius: 999px;
+      transform: translateY(-1px);
     }
 
+    .subline {
+      margin: 6px 0 0 18px;
+      font-size: 12px;
+      opacity: 0.8;
+      font-weight: 400;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #fff, var(--primary));
+      box-shadow: 0 0 0 2px rgba(34,211,238,0.15), 0 0 12px rgba(34,211,238,0.35);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+    .suggestions {
+      position: relative;
+      padding: 10px 12px 12px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: saturate(140%) blur(8px);
+      max-height: 120px;
+      transition: max-height .25s ease, opacity .2s ease, padding .25s ease, border-width .25s ease;
+    }
+    .suggestions.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; overflow: hidden; }
+    .suggestions strong {
+      display: block;
+      margin: 0 0 8px 2px;
+      color: #cbd5e1;
+      font-weight: 500;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+    .suggestion-list {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 2px 6px;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+      scrollbar-width: thin;                                 /* Firefox */
+      scrollbar-color: rgba(255,255,255,0.28) transparent;   /* Firefox */
+    }
+    .suggestion-list::-webkit-scrollbar { height: 6px; }
+    .suggestion-list::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+      border-radius: 9999px;
+    }
+    .suggestion-list::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.28);
+      border-radius: 9999px;
+      border: 1px solid rgba(148,163,184,0.25);
+    }
+    .suggestion-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+    .suggestions .edge {
+      position: absolute; top: 0; bottom: 0; width: 24px; pointer-events: none; transition: opacity .2s ease;
+    }
+    .suggestions .edge-left { left: 0; background: linear-gradient(90deg, rgba(11,18,32,0.95), rgba(11,18,32,0)); }
+    .suggestions .edge-right { right: 0; background: linear-gradient(270deg, rgba(11,18,32,0.95), rgba(11,18,32,0)); }
+    .suggestions.at-start .edge-left { opacity: 0; }
+    .suggestions.at-end .edge-right { opacity: 0; }
+    .chip {
+      flex: 0 0 auto;
+      padding: 7px 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      font-size: 12px;
+      color: #e5e7eb;
+      cursor: pointer;
+      transition: transform .15s ease, box-shadow .15s ease, border-color .15s;
+      white-space: nowrap;
+      user-select: none;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
+    }
+    .chip:hover { border-color: rgba(34,211,238,0.35); box-shadow: var(--glow); transform: translateY(-1px); }
+    .chip .chip-icon { display:inline-flex; align-items:center; margin-right: 6px; opacity: .85; }
+
     .chat-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 12px;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 14px 12px 88px; /* leave space for floating dock */
       display: flex;
       flex-direction: column;
       gap: 12px;
-      background: #f8f9fa;
-    }
-
-    .chat-container::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .chat-container::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .chat-container::-webkit-scrollbar-thumb {
-      background: #dadce0;
-      border-radius: 4px;
-    }
-
-    .chat-container::-webkit-scrollbar-thumb:hover {
-      background: #bdc1c6;
-    }
-
-    .message-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      animation: messageIn 0.2s ease-out;
-    }
-
-    @keyframes messageIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
     }
 
     .message {
-      padding: 10px 14px;
-      border-radius: 8px;
+      position: relative;
+      padding: 12px;
+      border-radius: 14px;
+      max-width: 88%;
+      line-height: 1.6;
       font-size: 13px;
-      line-height: 1.5;
-      max-width: 90%;
-      word-wrap: break-word;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
+    .message .actions {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      opacity: 0;
+      transform: translateY(-2px);
+      transition: opacity .15s ease, transform .15s ease;
+      display: flex; gap: 6px;
+    }
+    .message:hover .actions { opacity: 1; transform: translateY(0); }
+    .icon-btn {
+      width: 22px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 6px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      cursor: pointer; color: #cbd5e1;
+    }
+    .icon-btn:hover { border-color: rgba(34,211,238,0.35); color: white; box-shadow: var(--glow); }
 
     .message.user {
-      background: #1a73e8;
-      color: white;
+      background: linear-gradient(180deg, rgba(34,211,238,0.2), rgba(34,211,238,0.08));
+      color: #ecfeff;
+      border-color: rgba(34,211,238,0.35);
       align-self: flex-end;
-      border-bottom-right-radius: 2px;
     }
-
-    .message.agent {
-      background: #fff;
-      color: #202124;
-      align-self: flex-start;
-      border: 1px solid #e8eaed;
-      border-bottom-left-radius: 2px;
-      white-space: pre-wrap;
-      font-family: 'Segoe UI', Tahoma, sans-serif;
-      max-width: 95%;
-    }
-
+    .message.agent { align-self: flex-start; }
     .message.error {
-      background: #fce8e6;
-      color: #c5221f;
+      background-color: #fef2f2;
+      color: #991b1b;
       align-self: flex-start;
-      border: 1px solid #f4c7c3;
-      white-space: pre-wrap;
+      border-left: 3px solid #dc2626;
     }
-
     .message.success {
-      background: #e6f4ea;
-      color: #137333;
+      background-color: #f0fdf4;
+      color: #166534;
       align-self: flex-start;
-      border: 1px solid #c6e1c6;
-      white-space: pre-wrap;
+      border-left: 3px solid var(--primary);
     }
 
-    /* Code blocks and data formatting */
-    .message pre {
-      background: #f8f9fa;
-      border: 1px solid #e8eaed;
-      border-radius: 4px;
-      padding: 8px;
-      margin: 4px 0;
-      overflow-x: auto;
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
-    }
-
-    .message code {
-      background: #f8f9fa;
+    .badge {
+      display: inline-block;
       padding: 2px 6px;
-      border-radius: 3px;
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
-    }
-
-    .message strong {
-      font-weight: 600;
-      color: #1a73e8;
-    }
-
-    .message ul, .message ol {
-      margin: 8px 0;
-      padding-left: 20px;
-    }
-
-    .message li {
-      margin: 4px 0;
-    }
-
-    /* Thinking Stream Collapsible */
-    .thinking-container {
-      background: #fff;
-      border: 1px solid #e8eaed;
-      border-radius: 8px;
-      margin: 4px 0;
-      align-self: flex-start;
-      max-width: 95%;
-      width: 100%;
-      overflow: hidden;
-      box-shadow: 0 1px 2px rgba(60,64,67,0.1);
-    }
-
-    .thinking-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 14px;
-      cursor: pointer;
-      user-select: none;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e8eaed;
-    }
-
-    .thinking-header:hover {
-      background: #f1f3f4;
-    }
-
-    .thinking-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      color: #5f6368;
-    }
-
-    .thinking-spinner {
-      width: 14px;
-      height: 14px;
-      border: 2px solid #e8eaed;
-      border-top-color: #1a73e8;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .collapse-icon {
-      width: 20px;
-      height: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.2s;
-      color: #5f6368;
-    }
-
-    .collapse-icon.collapsed {
-      transform: rotate(-90deg);
-    }
-
-    .thinking-content {
-      max-height: 500px;
-      overflow: hidden;
-      transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
-      opacity: 1;
-    }
-
-    .thinking-content.collapsed {
-      max-height: 0;
-      opacity: 0;
-    }
-
-    .thinking-steps {
-      padding: 8px 14px 12px;
-    }
-
-    .thinking-step {
-      padding: 8px 0;
-      font-size: 12px;
-      color: #5f6368;
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      border-left: 2px solid #e8eaed;
-      padding-left: 12px;
-      margin-left: 6px;
-      opacity: 0;
-      animation: stepIn 0.3s ease-out forwards;
-    }
-
-    @keyframes stepIn {
-      from {
-        opacity: 0;
-        transform: translateX(-4px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    .thinking-step.complete {
-      color: #1e8e3e;
-      border-left-color: #1e8e3e;
-    }
-
-    .thinking-step.error {
-      color: #c5221f;
-      border-left-color: #c5221f;
-    }
-
-    .step-icon {
-      flex-shrink: 0;
-      width: 16px;
-      height: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 2px;
-    }
-
-    .step-text {
-      flex: 1;
-      line-height: 1.4;
-    }
-
-    .step-detail {
+      border-radius: 6px;
       font-size: 11px;
-      color: #80868b;
-      margin-top: 2px;
+      font-weight: 600;
+      vertical-align: baseline;
     }
+    .badge-success { background: rgba(22,101,52,0.18); color: #86efac; border: 1px solid rgba(134,239,172,0.25); }
+    .badge-error { background: rgba(190,18,60,0.18); color: #fecdd3; border: 1px solid rgba(254,205,211,0.25); }
 
-    /* Input Area */
-    .input-area {
-      flex-shrink: 0;
-      padding: 12px;
-      background: #fff;
-      border-top: 1px solid #e8eaed;
+    .loading {
+      position: sticky; bottom: 76px; /* sit above dock */
+      display: none;
+      text-align: center;
+      padding: 8px 12px;
+      color: #cbd5e1;
+      font-size: 12px;
     }
+    .loading.active { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(148,163,184,0.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    .input-wrapper {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      background: #f8f9fa;
-      border: 1px solid #dadce0;
-      border-radius: 24px;
-      padding: 4px 4px 4px 16px;
-      transition: all 0.2s;
+    .dock {
+      position: absolute; left: 12px; right: 12px; bottom: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      display: flex; gap: 8px; align-items: center;
+      padding: 10px 10px 10px 12px;
+      box-shadow: var(--shadow);
+      backdrop-filter: saturate(140%) blur(10px);
     }
-
-    .input-wrapper:focus-within {
-      background: #fff;
-      border-color: #1a73e8;
-      box-shadow: 0 1px 6px rgba(26, 115, 232, 0.3);
-    }
-
     #commandInput {
       flex: 1;
-      border: none;
+      padding: 10px 12px;
+      border: 0;
+      color: var(--text);
       background: transparent;
       font-size: 13px;
       outline: none;
-      padding: 8px 0;
-      color: #202124;
+      font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
-
-    #commandInput::placeholder {
-      color: #80868b;
+    .circle-btn {
+      width: 34px; height: 34px; border-radius: 999px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+      color: #e2e8f0; cursor: pointer;
+      transition: transform .12s ease, box-shadow .15s ease, border-color .15s ease;
     }
+    .circle-btn:hover { transform: translateY(-1px); box-shadow: var(--glow); border-color: rgba(34,211,238,0.35); }
+    .circle-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    #sendBtn {
-      padding: 8px 20px;
-      background: #1a73e8;
-      color: white;
-      border: none;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-
-    #sendBtn:hover:not(:disabled) {
-      background: #1765cc;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    }
-
-    #sendBtn:disabled {
-      background: #e8eaed;
-      color: #80868b;
-      cursor: not-allowed;
-    }
-
-    /* Quick Actions */
-    .quick-actions {
-      padding: 8px 12px;
-      background: #fff;
-      border-bottom: 1px solid #e8eaed;
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      flex-shrink: 0;
-    }
-
-    .quick-actions::-webkit-scrollbar {
-      height: 4px;
-    }
-
-    .quick-action {
-      padding: 6px 12px;
-      background: #f8f9fa;
-      border: 1px solid #dadce0;
-      border-radius: 16px;
-      font-size: 11px;
-      color: #5f6368;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s;
-    }
-
-    .quick-action:hover {
-      background: #e8eaed;
-      border-color: #5f6368;
-    }
-
-    /* Empty State */
-    .empty-state {
+    .welcome-message {
       text-align: center;
-      padding: 40px 20px;
-      color: #5f6368;
+      padding: 20px 12px 8px;
+      color: var(--muted);
+    }
+    .welcome-message h3 {
+      margin: 0 0 8px 0;
+      color: #0a0a0a;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.01em;
     }
 
-    .empty-state-icon {
-      font-size: 48px;
-      margin-bottom: 12px;
-      opacity: 0.3;
-    }
-
-    .empty-state h3 {
-      font-size: 14px;
-      font-weight: 500;
-      color: #202124;
-      margin-bottom: 6px;
-    }
-
-    .empty-state p {
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 6px;
+      overflow: auto;
       font-size: 12px;
-      line-height: 1.5;
-    }
-
-    /* Status Badge */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      background: #e8f5e9;
-      border-radius: 12px;
-      font-size: 10px;
-      color: #1e8e3e;
-      font-weight: 500;
-    }
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      background: #1e8e3e;
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      border: 1px solid var(--border);
+      max-width: 100%;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="header-title">
-      <span>💬</span>
-      SheetSense AI
-      <span class="status-badge">
-        <span class="status-dot"></span>
-        Online
-      </span>
+  <div class="layout">
+    <div class="header">
+      <div class="brand">
+        <span class="status-indicator"></span>
+        SheetSense
+        <span class="tag">AI</span>
+      </div>
+      <p class="subline">Natural language spreadsheet copilot</p>
+      <div style="position:absolute; top:10px; right:10px; display:flex; gap:6px;">
+        <button class="icon-btn" aria-label="Clear chat" title="Clear chat" onclick="clearChat()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="header-subtitle">Natural language spreadsheet assistant</div>
-  </div>
 
-  <div class="quick-actions">
-    <div class="quick-action" onclick="insertCommand('List all tabs')">📑 List tabs</div>
-    <div class="quick-action" onclick="insertCommand('Show me data in A1:E5')">📊 Show data</div>
-    <div class="quick-action" onclick="insertCommand('Add a new row')">➕ Add row</div>
-  </div>
-
-  <div class="chat-container" id="chatContainer">
-    <div class="empty-state">
-      <div class="empty-state-icon">💭</div>
-      <h3>Ready to assist</h3>
-      <p>Ask me to read, write, or analyze your spreadsheet data using natural language.</p>
+    <div class="suggestions">
+      <strong>Try these commands:</strong>
+      <div class="suggestion-list">
+        <div class="chip" onclick="insertSuggestionText('Show me the data in A1:E5')">
+          <span class="chip-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 5.8L20 9l-5 3.8L16 20l-4-3-4 3 1-7.2L4 9l6.1-1.2L12 2z"/></svg>
+          </span>
+          Show me the data in A1:E5
+        </div>
+        <div class="chip" onclick="insertSuggestionText(`Put 'Hello' in cell A1`)">
+          <span class="chip-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-6"/><path d="M6 20V10"/><path d="M18 20v-4"/></svg>
+          </span>
+          Put 'Hello' in cell A1
+        </div>
+        <div class="chip" onclick="insertSuggestionText('List all tabs')">
+          <span class="chip-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+          </span>
+          List all tabs
+        </div>
+      </div>
+      <div class="edge edge-left"></div>
+      <div class="edge edge-right"></div>
     </div>
-  </div>
 
-  <div class="input-area">
-    <div class="input-wrapper">
+    <div class="chat-container" id="chatContainer">
+      <div class="welcome-message">
+        <h3>Welcome to SheetSense!</h3>
+        <p>Ask me anything about your spreadsheet in natural language.</p>
+      </div>
+    </div>
+
+    <div class="loading" id="loading"><span class="spinner"></span> Agent is thinking</div>
+    <div class="dock">
       <input
         type="text"
         id="commandInput"
-        placeholder="Ask anything about your spreadsheet..."
+        placeholder="Ask SheetSense to do something…"
         onkeypress="handleKeyPress(event)"
+        autocomplete="off"
       >
-      <button id="sendBtn" onclick="sendCommand()">Send</button>
+      <button class="circle-btn" id="sendBtn" onclick="sendCommand()" aria-label="Send" title="Send">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
     </div>
   </div>
 
@@ -484,10 +374,12 @@
     const chatContainer = document.getElementById('chatContainer');
     const commandInput = document.getElementById('commandInput');
     const sendBtn = document.getElementById('sendBtn');
-    let thinkingStepIndex = 0;
+    const loading = document.getElementById('loading');
+    const suggestionsWrap = document.querySelector('.suggestions');
+    const suggestionsList = document.querySelector('.suggestion-list');
 
-    function insertCommand(cmd) {
-      commandInput.value = cmd;
+    function insertSuggestionText(text) {
+      commandInput.value = text;
       commandInput.focus();
     }
 
@@ -498,149 +390,38 @@
       }
     }
 
-    function clearEmptyState() {
-      const emptyState = chatContainer.querySelector('.empty-state');
-      if (emptyState) emptyState.remove();
-    }
-
     function addMessage(text, type = 'agent') {
-      clearEmptyState();
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${type}`;
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      actions.innerHTML = `
+        <button class="icon-btn" aria-label="Copy message" title="Copy message" onclick="copyMessage(this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>`;
 
-      const messageGroup = document.createElement('div');
-      messageGroup.className = 'message-group';
+      // Simple formatting
+      const formattedText = String(text)
+        .replace(/\[SUCCESS\]/g, '<span class="badge badge-success">SUCCESS</span>')
+        .replace(/\[ERROR\]/g, '<span class="badge badge-error">ERROR</span>');
 
-      const message = document.createElement('div');
-      message.className = `message ${type}`;
+      const content = document.createElement('div');
+      content.className = 'content';
+      content.innerHTML = formattedText;
 
-      // Enhanced text formatting
-      let formattedText = text
-        // Replace success/error markers with icons
-        .replace(/\[SUCCESS\]/g, '<strong style="color: #1e8e3e;">✓</strong>')
-        .replace(/\[ERROR\]/g, '<strong style="color: #c5221f;">✗</strong>')
-        .replace(/✅/g, '<strong style="color: #1e8e3e;">✓</strong>')
-        .replace(/❌/g, '<strong style="color: #c5221f;">✗</strong>')
-
-        // Format headers (lines starting with ##)
-        .replace(/^## (.+)$/gm, '<strong style="font-size: 14px; display: block; margin: 8px 0 4px 0;">$1</strong>')
-
-        // Format bold text
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-
-        // Format inline code
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-
-        // Preserve line breaks
-        .replace(/\n/g, '<br>');
-
-      // Check if this looks like tabular data (contains pipes or lots of spaces)
-      if (text.includes('|') || /\s{3,}/.test(text)) {
-        message.style.fontFamily = "'Courier New', monospace";
-        message.style.fontSize = '11px';
-      }
-
-      message.innerHTML = formattedText;
-      messageGroup.appendChild(message);
-      chatContainer.appendChild(messageGroup);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-
-      return message;
-    }
-
-    function createThinkingStream() {
-      clearEmptyState();
-      thinkingStepIndex = 0;
-
-      const container = document.createElement('div');
-      container.className = 'thinking-container';
-      container.id = 'thinking-stream';
-
-      container.innerHTML = `
-        <div class="thinking-header" onclick="toggleThinking()">
-          <div class="thinking-title">
-            <div class="thinking-spinner"></div>
-            <span>Processing request...</span>
-          </div>
-          <div class="collapse-icon">▼</div>
-        </div>
-        <div class="thinking-content">
-          <div class="thinking-steps" id="thinking-steps"></div>
-        </div>
-      `;
-
-      chatContainer.appendChild(container);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-
-      return container;
-    }
-
-    function toggleThinking() {
-      const content = document.querySelector('.thinking-content');
-      const icon = document.querySelector('.collapse-icon');
-
-      if (content && icon) {
-        content.classList.toggle('collapsed');
-        icon.classList.toggle('collapsed');
-      }
-    }
-
-    function addThinkingStep(text, detail = '', isComplete = false, isError = false) {
-      const stepsContainer = document.getElementById('thinking-steps');
-      if (!stepsContainer) return;
-
-      const step = document.createElement('div');
-      step.className = 'thinking-step';
-      if (isComplete) step.classList.add('complete');
-      if (isError) step.classList.add('error');
-
-      const icon = isComplete ? '✓' : isError ? '✗' : '○';
-
-      step.innerHTML = `
-        <div class="step-icon">${icon}</div>
-        <div class="step-text">
-          ${text}
-          ${detail ? `<div class="step-detail">${detail}</div>` : ''}
-        </div>
-      `;
-
-      step.style.animationDelay = `${thinkingStepIndex * 0.1}s`;
-      thinkingStepIndex++;
-
-      stepsContainer.appendChild(step);
+      messageDiv.appendChild(actions);
+      messageDiv.appendChild(content);
+      chatContainer.appendChild(messageDiv);
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    function simulateThinkingSteps() {
-      setTimeout(() => addThinkingStep('Parsing natural language input', 'Extracting intent and parameters'), 100);
-      setTimeout(() => addThinkingStep('Analyzing spreadsheet context', 'Identifying target sheets and ranges'), 400);
-      setTimeout(() => addThinkingStep('Consulting Gemini AI', 'Generating optimal execution plan'), 800);
-      setTimeout(() => addThinkingStep('Preparing API request', 'Validating parameters and permissions'), 1200);
-    }
-
-    function completeThinking(success = true) {
-      const stream = document.getElementById('thinking-stream');
-      if (!stream) return;
-
-      const spinner = stream.querySelector('.thinking-spinner');
-      const title = stream.querySelector('.thinking-title span');
-
-      if (spinner) spinner.remove();
-      if (title) {
-        title.textContent = success ? 'Request completed' : 'Request failed';
-        title.style.color = success ? '#1e8e3e' : '#c5221f';
-      }
-
-      if (success) {
-        addThinkingStep('Execution successful', 'Response received from agent', true);
-      } else {
-        addThinkingStep('Execution failed', 'Check error message below', false, true);
-      }
-    }
-
-    function removeThinkingStream() {
-      const stream = document.getElementById('thinking-stream');
-      if (stream) {
-        setTimeout(() => stream.remove(), 300);
-      }
+    function copyMessage(btn) {
+      const msg = btn.closest('.message');
+      if (!msg) return;
+      const text = msg.querySelector('.content')?.innerText || '';
+      navigator.clipboard?.writeText(text).catch(function(){});
+      btn.classList.add('copied');
+      setTimeout(() => btn.classList.remove('copied'), 900);
     }
 
     function sendCommand() {
@@ -649,12 +430,13 @@
 
       sendBtn.disabled = true;
       commandInput.disabled = true;
+      loading.classList.add('active');
+
+      // Hide suggestions after the first user message
+      collapseSuggestions();
 
       addMessage(command, 'user');
       commandInput.value = '';
-
-      createThinkingStream();
-      simulateThinkingSteps();
 
       google.script.run
         .withSuccessHandler(handleSuccess)
@@ -665,48 +447,61 @@
     function handleSuccess(response) {
       sendBtn.disabled = false;
       commandInput.disabled = false;
+      loading.classList.remove('active');
       commandInput.focus();
 
-      // Log response for debugging
-      console.log('Response received:', response);
-
-      completeThinking(response.success);
-
-      setTimeout(() => {
-        if (response.success) {
-          // Check if result is empty or undefined
-          const resultText = response.result || '(Empty response)';
-          const msg = addMessage(resultText, 'agent');
-
-          // Add visual emphasis for success responses
-          if (resultText.includes('✓') || resultText.includes('[SUCCESS]')) {
-            msg.style.borderLeft = '3px solid #1e8e3e';
-          }
-        } else {
-          const errorText = response.error || 'Unknown error occurred';
-          addMessage('❌ Error: ' + errorText, 'error');
-        }
-      }, 600);
+      if (response && response.success) {
+        addMessage(response.result ?? '');
+      } else {
+        addMessage((response && response.error) ? response.error : 'Unknown error', 'error');
+      }
     }
 
     function handleError(error) {
       sendBtn.disabled = false;
       commandInput.disabled = false;
+      loading.classList.remove('active');
       commandInput.focus();
 
-      // Log error for debugging
-      console.error('Request failed:', error);
-
-      completeThinking(false);
-
-      setTimeout(() => {
-        addMessage('❌ Connection Error: ' + (error.message || 'Failed to connect to server'), 'error');
-      }, 600);
+      addMessage('Error: ' + (error && error.message ? error.message : 'request failed'), 'error');
     }
 
-    window.onload = function() {
-      commandInput.focus();
-    };
+    window.onload = function() { commandInput.focus(); };
+
+    // Suggestion edge fades logic
+    function updateSuggestionFades() {
+      if (!suggestionsWrap || !suggestionsList) return;
+      const atStart = suggestionsList.scrollLeft <= 1;
+      const atEnd = (suggestionsList.scrollWidth - suggestionsList.clientWidth - suggestionsList.scrollLeft) <= 1;
+      suggestionsWrap.classList.toggle('at-start', atStart);
+      suggestionsWrap.classList.toggle('at-end', atEnd);
+    }
+    suggestionsList?.addEventListener('scroll', updateSuggestionFades, { passive: true });
+    window.addEventListener('resize', updateSuggestionFades);
+    setTimeout(updateSuggestionFades, 0);
+
+    function clearChat() {
+      chatContainer.innerHTML = '';
+      addWelcome();
+      // Restore suggestions visibility on clear
+      if (suggestionsWrap) {
+        suggestionsWrap.classList.remove('collapsed');
+        updateSuggestionFades();
+      }
+    }
+
+    function addWelcome() {
+      const w = document.createElement('div');
+      w.className = 'welcome-message';
+      w.innerHTML = '<h3>Welcome to SheetSense!</h3><p>Ask me anything about your spreadsheet in natural language.</p>';
+      chatContainer.appendChild(w);
+    }
+
+    function collapseSuggestions() {
+      if (suggestionsWrap && !suggestionsWrap.classList.contains('collapsed')) {
+        suggestionsWrap.classList.add('collapsed');
+      }
+    }
   </script>
 </body>
 </html>

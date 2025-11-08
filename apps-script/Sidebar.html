@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Google Sans', 'Segoe UI', Tahoma, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #ffffff;
+      color: #202124;
+      overflow: hidden;
+    }
+
+    .header {
+      background: #fff;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e8eaed;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #202124;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-subtitle {
+      font-size: 12px;
+      color: #5f6368;
+      margin-top: 4px;
+    }
+
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #f8f9fa;
+    }
+
+    .chat-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .chat-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #dadce0;
+      border-radius: 4px;
+    }
+
+    .chat-container::-webkit-scrollbar-thumb:hover {
+      background: #bdc1c6;
+    }
+
+    .message-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      animation: messageIn 0.2s ease-out;
+    }
+
+    @keyframes messageIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 90%;
+      word-wrap: break-word;
+    }
+
+    .message.user {
+      background: #1a73e8;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 2px;
+    }
+
+    .message.agent {
+      background: #fff;
+      color: #202124;
+      align-self: flex-start;
+      border: 1px solid #e8eaed;
+      border-bottom-left-radius: 2px;
+      white-space: pre-wrap;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      max-width: 95%;
+    }
+
+    .message.error {
+      background: #fce8e6;
+      color: #c5221f;
+      align-self: flex-start;
+      border: 1px solid #f4c7c3;
+      white-space: pre-wrap;
+    }
+
+    .message.success {
+      background: #e6f4ea;
+      color: #137333;
+      align-self: flex-start;
+      border: 1px solid #c6e1c6;
+      white-space: pre-wrap;
+    }
+
+    /* Code blocks and data formatting */
+    .message pre {
+      background: #f8f9fa;
+      border: 1px solid #e8eaed;
+      border-radius: 4px;
+      padding: 8px;
+      margin: 4px 0;
+      overflow-x: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    .message code {
+      background: #f8f9fa;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    .message strong {
+      font-weight: 600;
+      color: #1a73e8;
+    }
+
+    .message ul, .message ol {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .message li {
+      margin: 4px 0;
+    }
+
+    /* Thinking Stream Collapsible */
+    .thinking-container {
+      background: #fff;
+      border: 1px solid #e8eaed;
+      border-radius: 8px;
+      margin: 4px 0;
+      align-self: flex-start;
+      max-width: 95%;
+      width: 100%;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(60,64,67,0.1);
+    }
+
+    .thinking-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      cursor: pointer;
+      user-select: none;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e8eaed;
+    }
+
+    .thinking-header:hover {
+      background: #f1f3f4;
+    }
+
+    .thinking-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #5f6368;
+    }
+
+    .thinking-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #e8eaed;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .collapse-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+      color: #5f6368;
+    }
+
+    .collapse-icon.collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .thinking-content {
+      max-height: 500px;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+      opacity: 1;
+    }
+
+    .thinking-content.collapsed {
+      max-height: 0;
+      opacity: 0;
+    }
+
+    .thinking-steps {
+      padding: 8px 14px 12px;
+    }
+
+    .thinking-step {
+      padding: 8px 0;
+      font-size: 12px;
+      color: #5f6368;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      border-left: 2px solid #e8eaed;
+      padding-left: 12px;
+      margin-left: 6px;
+      opacity: 0;
+      animation: stepIn 0.3s ease-out forwards;
+    }
+
+    @keyframes stepIn {
+      from {
+        opacity: 0;
+        transform: translateX(-4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .thinking-step.complete {
+      color: #1e8e3e;
+      border-left-color: #1e8e3e;
+    }
+
+    .thinking-step.error {
+      color: #c5221f;
+      border-left-color: #c5221f;
+    }
+
+    .step-icon {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+
+    .step-text {
+      flex: 1;
+      line-height: 1.4;
+    }
+
+    .step-detail {
+      font-size: 11px;
+      color: #80868b;
+      margin-top: 2px;
+    }
+
+    /* Input Area */
+    .input-area {
+      flex-shrink: 0;
+      padding: 12px;
+      background: #fff;
+      border-top: 1px solid #e8eaed;
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: #f8f9fa;
+      border: 1px solid #dadce0;
+      border-radius: 24px;
+      padding: 4px 4px 4px 16px;
+      transition: all 0.2s;
+    }
+
+    .input-wrapper:focus-within {
+      background: #fff;
+      border-color: #1a73e8;
+      box-shadow: 0 1px 6px rgba(26, 115, 232, 0.3);
+    }
+
+    #commandInput {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      outline: none;
+      padding: 8px 0;
+      color: #202124;
+    }
+
+    #commandInput::placeholder {
+      color: #80868b;
+    }
+
+    #sendBtn {
+      padding: 8px 20px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    #sendBtn:hover:not(:disabled) {
+      background: #1765cc;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    #sendBtn:disabled {
+      background: #e8eaed;
+      color: #80868b;
+      cursor: not-allowed;
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e8eaed;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+
+    .quick-actions::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .quick-action {
+      padding: 6px 12px;
+      background: #f8f9fa;
+      border: 1px solid #dadce0;
+      border-radius: 16px;
+      font-size: 11px;
+      color: #5f6368;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .quick-action:hover {
+      background: #e8eaed;
+      border-color: #5f6368;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #5f6368;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.3;
+    }
+
+    .empty-state h3 {
+      font-size: 14px;
+      font-weight: 500;
+      color: #202124;
+      margin-bottom: 6px;
+    }
+
+    .empty-state p {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: #e8f5e9;
+      border-radius: 12px;
+      font-size: 10px;
+      color: #1e8e3e;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: #1e8e3e;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-title">
+      <span>💬</span>
+      SheetSense AI
+      <span class="status-badge">
+        <span class="status-dot"></span>
+        Online
+      </span>
+    </div>
+    <div class="header-subtitle">Natural language spreadsheet assistant</div>
+  </div>
+
+  <div class="quick-actions">
+    <div class="quick-action" onclick="insertCommand('List all tabs')">📑 List tabs</div>
+    <div class="quick-action" onclick="insertCommand('Show me data in A1:E5')">📊 Show data</div>
+    <div class="quick-action" onclick="insertCommand('Add a new row')">➕ Add row</div>
+  </div>
+
+  <div class="chat-container" id="chatContainer">
+    <div class="empty-state">
+      <div class="empty-state-icon">💭</div>
+      <h3>Ready to assist</h3>
+      <p>Ask me to read, write, or analyze your spreadsheet data using natural language.</p>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-wrapper">
+      <input
+        type="text"
+        id="commandInput"
+        placeholder="Ask anything about your spreadsheet..."
+        onkeypress="handleKeyPress(event)"
+      >
+      <button id="sendBtn" onclick="sendCommand()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const chatContainer = document.getElementById('chatContainer');
+    const commandInput = document.getElementById('commandInput');
+    const sendBtn = document.getElementById('sendBtn');
+    let thinkingStepIndex = 0;
+
+    function insertCommand(cmd) {
+      commandInput.value = cmd;
+      commandInput.focus();
+    }
+
+    function handleKeyPress(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendCommand();
+      }
+    }
+
+    function clearEmptyState() {
+      const emptyState = chatContainer.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
+    }
+
+    function addMessage(text, type = 'agent') {
+      clearEmptyState();
+
+      const messageGroup = document.createElement('div');
+      messageGroup.className = 'message-group';
+
+      const message = document.createElement('div');
+      message.className = `message ${type}`;
+
+      // Enhanced text formatting
+      let formattedText = text
+        // Replace success/error markers with icons
+        .replace(/\[SUCCESS\]/g, '<strong style="color: #1e8e3e;">✓</strong>')
+        .replace(/\[ERROR\]/g, '<strong style="color: #c5221f;">✗</strong>')
+        .replace(/✅/g, '<strong style="color: #1e8e3e;">✓</strong>')
+        .replace(/❌/g, '<strong style="color: #c5221f;">✗</strong>')
+
+        // Format headers (lines starting with ##)
+        .replace(/^## (.+)$/gm, '<strong style="font-size: 14px; display: block; margin: 8px 0 4px 0;">$1</strong>')
+
+        // Format bold text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+
+        // Format inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+
+        // Preserve line breaks
+        .replace(/\n/g, '<br>');
+
+      // Check if this looks like tabular data (contains pipes or lots of spaces)
+      if (text.includes('|') || /\s{3,}/.test(text)) {
+        message.style.fontFamily = "'Courier New', monospace";
+        message.style.fontSize = '11px';
+      }
+
+      message.innerHTML = formattedText;
+      messageGroup.appendChild(message);
+      chatContainer.appendChild(messageGroup);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      return message;
+    }
+
+    function createThinkingStream() {
+      clearEmptyState();
+      thinkingStepIndex = 0;
+
+      const container = document.createElement('div');
+      container.className = 'thinking-container';
+      container.id = 'thinking-stream';
+
+      container.innerHTML = `
+        <div class="thinking-header" onclick="toggleThinking()">
+          <div class="thinking-title">
+            <div class="thinking-spinner"></div>
+            <span>Processing request...</span>
+          </div>
+          <div class="collapse-icon">▼</div>
+        </div>
+        <div class="thinking-content">
+          <div class="thinking-steps" id="thinking-steps"></div>
+        </div>
+      `;
+
+      chatContainer.appendChild(container);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      return container;
+    }
+
+    function toggleThinking() {
+      const content = document.querySelector('.thinking-content');
+      const icon = document.querySelector('.collapse-icon');
+
+      if (content && icon) {
+        content.classList.toggle('collapsed');
+        icon.classList.toggle('collapsed');
+      }
+    }
+
+    function addThinkingStep(text, detail = '', isComplete = false, isError = false) {
+      const stepsContainer = document.getElementById('thinking-steps');
+      if (!stepsContainer) return;
+
+      const step = document.createElement('div');
+      step.className = 'thinking-step';
+      if (isComplete) step.classList.add('complete');
+      if (isError) step.classList.add('error');
+
+      const icon = isComplete ? '✓' : isError ? '✗' : '○';
+
+      step.innerHTML = `
+        <div class="step-icon">${icon}</div>
+        <div class="step-text">
+          ${text}
+          ${detail ? `<div class="step-detail">${detail}</div>` : ''}
+        </div>
+      `;
+
+      step.style.animationDelay = `${thinkingStepIndex * 0.1}s`;
+      thinkingStepIndex++;
+
+      stepsContainer.appendChild(step);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function simulateThinkingSteps() {
+      setTimeout(() => addThinkingStep('Parsing natural language input', 'Extracting intent and parameters'), 100);
+      setTimeout(() => addThinkingStep('Analyzing spreadsheet context', 'Identifying target sheets and ranges'), 400);
+      setTimeout(() => addThinkingStep('Consulting Gemini AI', 'Generating optimal execution plan'), 800);
+      setTimeout(() => addThinkingStep('Preparing API request', 'Validating parameters and permissions'), 1200);
+    }
+
+    function completeThinking(success = true) {
+      const stream = document.getElementById('thinking-stream');
+      if (!stream) return;
+
+      const spinner = stream.querySelector('.thinking-spinner');
+      const title = stream.querySelector('.thinking-title span');
+
+      if (spinner) spinner.remove();
+      if (title) {
+        title.textContent = success ? 'Request completed' : 'Request failed';
+        title.style.color = success ? '#1e8e3e' : '#c5221f';
+      }
+
+      if (success) {
+        addThinkingStep('Execution successful', 'Response received from agent', true);
+      } else {
+        addThinkingStep('Execution failed', 'Check error message below', false, true);
+      }
+    }
+
+    function removeThinkingStream() {
+      const stream = document.getElementById('thinking-stream');
+      if (stream) {
+        setTimeout(() => stream.remove(), 300);
+      }
+    }
+
+    function sendCommand() {
+      const command = commandInput.value.trim();
+      if (!command) return;
+
+      sendBtn.disabled = true;
+      commandInput.disabled = true;
+
+      addMessage(command, 'user');
+      commandInput.value = '';
+
+      createThinkingStream();
+      simulateThinkingSteps();
+
+      google.script.run
+        .withSuccessHandler(handleSuccess)
+        .withFailureHandler(handleError)
+        .executeCommand(command);
+    }
+
+    function handleSuccess(response) {
+      sendBtn.disabled = false;
+      commandInput.disabled = false;
+      commandInput.focus();
+
+      // Log response for debugging
+      console.log('Response received:', response);
+
+      completeThinking(response.success);
+
+      setTimeout(() => {
+        if (response.success) {
+          // Check if result is empty or undefined
+          const resultText = response.result || '(Empty response)';
+          const msg = addMessage(resultText, 'agent');
+
+          // Add visual emphasis for success responses
+          if (resultText.includes('✓') || resultText.includes('[SUCCESS]')) {
+            msg.style.borderLeft = '3px solid #1e8e3e';
+          }
+        } else {
+          const errorText = response.error || 'Unknown error occurred';
+          addMessage('❌ Error: ' + errorText, 'error');
+        }
+      }, 600);
+    }
+
+    function handleError(error) {
+      sendBtn.disabled = false;
+      commandInput.disabled = false;
+      commandInput.focus();
+
+      // Log error for debugging
+      console.error('Request failed:', error);
+
+      completeThinking(false);
+
+      setTimeout(() => {
+        addMessage('❌ Connection Error: ' + (error.message || 'Failed to connect to server'), 'error');
+      }, 600);
+    }
+
+    window.onload = function() {
+      commandInput.focus();
+    };
+  </script>
+</body>
+</html>

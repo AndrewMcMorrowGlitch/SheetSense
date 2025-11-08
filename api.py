@@ -43,7 +43,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="SheetSense API",
     description="Natural language Google Sheets agent API",
-    version="1.0.0"
+    version="1.0.0",
+    root_path="/api"
 )
 
 # Add CORS middleware for browser clients
@@ -240,4 +241,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")

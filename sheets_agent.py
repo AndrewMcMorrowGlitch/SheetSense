@@ -186,18 +186,157 @@ def find_replace(spreadsheet_id, sheet_name, find_text, replace_text):
         print(f"✗ Error in find/replace: {e}")
         return 0
 
+# Intelligent Agent using Gemini
+import json
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class SheetsAgent:
+    def __init__(self):
+        # Configure Gemini API
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        self.model = genai.GenerativeModel('gemini-2.5-pro')
+        
+        # Get available sheets
+        self.sheets = discover_google_sheets()
+        if self.sheets:
+            self.default_sheet_id = self.sheets[0]['id']
+            self.default_sheet_name = "Data"  # Default to Data sheet
+        else:
+            self.default_sheet_id = None
+            self.default_sheet_name = None
+    
+    def execute_command(self, user_prompt):
+        """Execute a natural language command on Google Sheets"""
+        if not self.default_sheet_id:
+            return "❌ No Google Sheets found. Please share a sheet with the service account first."
+        
+        # Create function calling prompt
+        system_prompt = f"""You are a Google Sheets agent. You have access to these functions:
+
+1. write_cell(cell, value) - Write a value to a specific cell (e.g., "A1", "B5")
+2. read_range(range_cells) - Read data from a range (e.g., "A1:C10", "A:A")  
+3. append_row(data) - Add a new row with data as a list
+4. find_replace(find_text, replace_text) - Replace all occurrences of text
+
+Current sheet: "{self.sheets[0]['name']}" (ID: {self.default_sheet_id})
+Sheet name: "{self.default_sheet_name}"
+
+Based on the user's request, determine which function to call and with what parameters.
+Return ONLY a JSON object with the function call, like:
+{{"function": "write_cell", "params": {{"cell": "A1", "value": "Hello"}}}}
+
+If the request is unclear or impossible, return:
+{{"error": "explanation of the problem"}}
+
+User request: {user_prompt}"""
+
+        try:
+            # Get Gemini's response
+            response = self.model.generate_content(system_prompt)
+            response_text = response.text.strip()
+            
+            # Parse the JSON response
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+            
+            command = json.loads(response_text)
+            
+            if "error" in command:
+                return f"❌ {command['error']}"
+            
+            # Execute the function
+            return self._execute_function(command)
+            
+        except Exception as e:
+            return f"❌ Error processing command: {str(e)}"
+    
+    def _execute_function(self, command):
+        """Execute the parsed function call"""
+        func_name = command.get("function")
+        params = command.get("params", {})
+        
+        try:
+            if func_name == "write_cell":
+                result = write_cell(
+                    self.default_sheet_id, 
+                    self.default_sheet_name, 
+                    params["cell"], 
+                    params["value"]
+                )
+                return f"✅ Successfully wrote '{params['value']}' to cell {params['cell']}"
+            
+            elif func_name == "read_range":
+                result = read_range(
+                    self.default_sheet_id, 
+                    self.default_sheet_name, 
+                    params["range_cells"]
+                )
+                if result:
+                    return f"✅ Data from {params['range_cells']}:\n" + "\n".join([str(row) for row in result[:10]])
+                else:
+                    return "❌ No data found in that range"
+            
+            elif func_name == "append_row":
+                result = append_row(
+                    self.default_sheet_id, 
+                    self.default_sheet_name, 
+                    params["data"]
+                )
+                return f"✅ Successfully added new row with data: {params['data']}"
+            
+            elif func_name == "find_replace":
+                result = find_replace(
+                    self.default_sheet_id, 
+                    self.default_sheet_name, 
+                    params["find_text"], 
+                    params["replace_text"]
+                )
+                return f"✅ Replaced {result} occurrences of '{params['find_text']}' with '{params['replace_text']}'"
+            
+            else:
+                return f"❌ Unknown function: {func_name}"
+                
+        except Exception as e:
+            return f"❌ Error executing {func_name}: {str(e)}"
+
+def chat_interface():
+    """Simple chat interface for testing the agent"""
+    agent = SheetsAgent()
+    
+    print("🤖 SheetSense Agent Ready!")
+    print("💡 Try commands like:")
+    print("   - 'Put Hello in cell A1'")
+    print("   - 'Show me the data in A1:E5'") 
+    print("   - 'Add a new employee row with John, Doe, Developer'")
+    print("   - 'Replace all Manager with Director'")
+    print("   - Type 'quit' to exit\n")
+    
+    while True:
+        user_input = input("👤 You: ").strip()
+        
+        if user_input.lower() in ['quit', 'exit', 'q']:
+            print("👋 Goodbye!")
+            break
+            
+        if not user_input:
+            continue
+            
+        print("🤖 Agent:", agent.execute_command(user_input))
+        print()
+
 if __name__ == "__main__":
     print("=== Google Sheets Discovery ===\n")
     
     # Discover all Google Sheets
     sheets = discover_google_sheets()
     
-    # If sheets found, offer to read from the first one
+    # If sheets found, offer to start the agent
     if sheets:
-        print(f"\nWould you like to read sample data from '{sheets[0]['name']}'?")
-        print("Uncomment the lines below and run again:")
-        print(f"# read_sheet_sample('{sheets[0]['id']}')")
-        print("\n# Example agent functions:")
-        print(f"# write_cell('{sheets[0]['id']}', 'Data', 'P1', 'Agent Test')")
-        print(f"# append_row('{sheets[0]['id']}', 'Data', ['E12345', 'John Doe', 'Developer'])")
-        print(f"# find_replace('{sheets[0]['id']}', 'Data', 'Manager', 'Director')")
+        print(f"\nFound sheet: '{sheets[0]['name']}'")
+        print("\n🤖 Starting SheetSense Agent...")
+        chat_interface()
+    else:
+        print("❌ No sheets found. Share a sheet with the service account first.")

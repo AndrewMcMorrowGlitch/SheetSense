@@ -24,3 +24,36 @@ Google Sheets API integration with service account authentication.
    ```
 
 ⚠️ **Never commit the JSON file to git** - it's already in `.gitignore`
+
+## API Usage
+
+Run the web API server:
+```bash
+python api.py
+```
+
+### Key Endpoints
+
+- **POST /execute-command**: Execute single command, get JSON response
+- **GET /execute-stream**: Execute command with real-time streaming updates  
+- **GET /health**: Check API and agent status
+- **GET /docs**: Interactive API documentation
+
+### Example Commands
+
+- "Put Hello in cell A1"
+- "Show me data in A1:E5"
+- "Add a new row with John, Doe, Developer"
+- "Replace Manager with Director"
+
+### Example Usage
+
+```bash
+# Execute command via POST
+curl -X POST "http://localhost:8000/execute-command" \
+     -H "Content-Type: application/json" \
+     -d '{"command": "Put Hello in cell A1"}'
+
+# Stream command execution
+curl "http://localhost:8000/execute-stream?command=Show%20me%20data%20in%20A1:E5"
+```

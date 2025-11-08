@@ -1,3 +1,29 @@
+"""
+SheetSense API - Natural Language Google Sheets Agent
+
+A FastAPI web service that provides natural language interface to Google Sheets.
+
+## Quick Start
+
+1. Install dependencies: pip install -r requirements.txt
+2. Set up Google Sheets API credentials (service account JSON)
+3. Run: python api.py
+4. API docs: http://localhost:8000/docs
+
+## Key Endpoints
+
+- POST /execute-command: Execute single command, get JSON response
+- GET /execute-stream: Execute command with real-time streaming updates
+- GET /health: Check API and agent status
+
+## Example Commands
+
+- "Put Hello in cell A1"
+- "Show me data in A1:E5" 
+- "Add a new row with John, Doe, Developer"
+- "Replace Manager with Director"
+"""
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware

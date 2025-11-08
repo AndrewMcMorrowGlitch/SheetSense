@@ -27,7 +27,14 @@ Google Sheets API integration with service account authentication.
 
 ## API Usage
 
-Run the web API server:
+### Live Production API
+🚀 **Production Server**: https://sheetsense-ugeg.onrender.com/api
+
+- **Interactive Docs**: https://sheetsense-ugeg.onrender.com/api/docs
+- **Health Check**: https://sheetsense-ugeg.onrender.com/api/health
+
+### Local Development
+Run the web API server locally:
 ```bash
 python api.py
 ```
@@ -48,12 +55,27 @@ python api.py
 
 ### Example Usage
 
+**Production API:**
 ```bash
 # Execute command via POST
-curl -X POST "http://localhost:8000/execute-command" \
+curl -X POST "https://sheetsense-ugeg.onrender.com/api/execute-command" \
      -H "Content-Type: application/json" \
      -d '{"command": "Put Hello in cell A1"}'
 
 # Stream command execution
-curl "http://localhost:8000/execute-stream?command=Show%20me%20data%20in%20A1:E5"
+curl "https://sheetsense-ugeg.onrender.com/api/execute-stream?command=Show%20me%20data%20in%20A1:E5"
+
+# Health check
+curl "https://sheetsense-ugeg.onrender.com/api/health"
+```
+
+**Local Development:**
+```bash
+# Execute command via POST
+curl -X POST "http://localhost:5000/api/execute-command" \
+     -H "Content-Type: application/json" \
+     -d '{"command": "Put Hello in cell A1"}'
+
+# Stream command execution
+curl "http://localhost:5000/api/execute-stream?command=Show%20me%20data%20in%20A1:E5"
 ```

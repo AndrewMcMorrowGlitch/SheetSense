@@ -1583,24 +1583,30 @@ User request: {user_prompt}
 
         return execution_log
 
-    def _summarize_execution(self, user_prompt: str, plan: Dict[str, Any], execution_log: List[Dict[str, Any]]) -> str:
-        log_payload = json.dumps(execution_log)
-        plan_payload = json.dumps(plan)
-        summary_prompt = f"""You are a friendly assistant summarizing the result of a multi-step Google Sheets automation.
+    def _summarize_execution(
+        self,
+        user_prompt: str,
+        plan: Dict[str, Any],
+        execution_log: List[Dict[str, Any]],
+    ) -> str:
+        total_steps = len(plan.get("plan") or [])
+        successes = [entry for entry in execution_log if entry.get("status") == "success"]
+        errors = [entry for entry in execution_log if entry.get("status") == "error"]
 
-User request: {user_prompt}
-Plan: {plan_payload}
-Execution log: {log_payload}
+        if errors:
+            first_error = errors[0]
+            step_number = first_error.get("step", "?")
+            function_name = first_error.get("function") or "step"
+            error_text = first_error.get("error") or first_error.get("output") or "an error occurred"
+            return (
+                f"Ran {len(successes)} of {total_steps} steps. "
+                f"Stopped at step {step_number} ({function_name}) because {error_text}."
+            )
 
-Write a short response that:
-- Mentions the plan/thinking phase
-- Lists the executed steps and their outcomes
-- Notes any errors explicitly
-- Ends with the final status or next recommendation
-"""
+        if total_steps == 0:
+            return "No steps were required."
 
-        response = self.model.generate_content(summary_prompt)
-        return response.text.strip()
+        return f"Completed {total_steps} steps successfully."
 
     def _refresh_subsheet_cache(self):
         if not self.default_sheet_id:

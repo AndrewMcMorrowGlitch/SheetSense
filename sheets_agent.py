@@ -834,6 +834,7 @@ def query_range_data(
     header_row = values[0] if headers else [f"Col{i+1}" for i in range(len(values[0]))]
     sanitized = []
     mapping = {}
+    letter_aliases: Dict[str, str] = {}
     for idx, header in enumerate(header_row):
         safe = re.sub(r"[^0-9a-zA-Z_]", "_", header or f"Col{idx+1}")
         if not safe:
@@ -845,12 +846,16 @@ def query_range_data(
             count += 1
         sanitized.append(safe)
         mapping[header] = safe
+        letter_aliases[column_index_to_letter(idx)] = safe
+        letter_aliases[f"Col{idx+1}"] = safe
 
     # Replace column names in query with sanitized tokens (simple replacement)
     normalized_query = query_string
     for original, safe in mapping.items():
         if original:
             normalized_query = re.sub(rf"\b{re.escape(original)}\b", safe, normalized_query)
+    for alias, safe in letter_aliases.items():
+        normalized_query = re.sub(rf"\b{re.escape(alias)}\b", safe, normalized_query)
 
     conn = sqlite3.connect(":memory:")
     try:
@@ -1311,17 +1316,169 @@ class SheetsAgent:
                 return f"✅ MATCH found at position {index}"
             elif func_name == "index_match":
                 target_sheet = resolve_sheet_name()
+                adjusted_params = dict(params)
+
+                def _coalesce_value(keys: List[str]) -> Any | None:
+                    for key in keys:
+                        if key in adjusted_params:
+                            value = adjusted_params.get(key)
+                            if value not in (None, ""):
+                                return value
+                    return None
+
+                row_lookup_config = adjusted_params.get("row_lookup")
+                if isinstance(row_lookup_config, dict):
+                    if not adjusted_params.get("row_lookup_value"):
+                        value = row_lookup_config.get("lookup_value")
+                        if value not in (None, ""):
+                            adjusted_params["row_lookup_value"] = value
+                    if not adjusted_params.get("row_lookup_range"):
+                        rng = row_lookup_config.get("lookup_range") or row_lookup_config.get("range")
+                        if rng:
+                            adjusted_params["row_lookup_range"] = rng
+                    if not adjusted_params.get("match_type") and row_lookup_config.get("match_type") is not None:
+                        adjusted_params["match_type"] = row_lookup_config.get("match_type")
+
+                column_lookup_config = adjusted_params.get("column_lookup")
+                if isinstance(column_lookup_config, dict):
+                    if not adjusted_params.get("column_lookup_value"):
+                        value = column_lookup_config.get("lookup_value")
+                        if value not in (None, ""):
+                            adjusted_params["column_lookup_value"] = value
+                    if not adjusted_params.get("column_lookup_range"):
+                        rng = column_lookup_config.get("lookup_range") or column_lookup_config.get("range")
+                        if rng:
+                            adjusted_params["column_lookup_range"] = rng
+                    if not adjusted_params.get("col_num"):
+                        col_num = column_lookup_config.get("col_num")
+                        if col_num:
+                            adjusted_params["col_num"] = col_num
+
+                if not adjusted_params.get("row_lookup_value"):
+                    candidate = _coalesce_value([
+                        "lookup_value",
+                        "match_value",
+                        "lookup",
+                        "value",
+                        "row_value",
+                        "row_match",
+                        "row_key",
+                        "lookup_key",
+                        "search_value",
+                        "search_key",
+                        "criteria_value",
+                        "match_target",
+                        "row_target",
+                    ])
+                    if candidate is not None:
+                        adjusted_params["row_lookup_value"] = candidate
+
+                if not adjusted_params.get("column_lookup_value"):
+                    candidate = _coalesce_value([
+                        "column_value",
+                        "return_column",
+                        "result_column",
+                        "column_header",
+                        "target_column",
+                        "column_match",
+                        "column_key",
+                        "output_column",
+                        "column_name",
+                    ])
+                    if candidate is not None:
+                        adjusted_params["column_lookup_value"] = candidate
+
+                def _ensure_headers() -> List[str]:
+                    headers = self.sheet_headers.get(target_sheet)
+                    if headers is None:
+                        self._refresh_sheet_headers()
+                        headers = self.sheet_headers.get(target_sheet, [])
+                    return headers
+
+                def _column_letter_from_spec(spec: Any) -> Optional[str]:
+                    if spec is None:
+                        return None
+                    if isinstance(spec, int):
+                        if spec < 1:
+                            raise ValueError("Column numbers must be >= 1")
+                        return column_index_to_letter(spec - 1)
+                    if isinstance(spec, str):
+                        cleaned = spec.strip()
+                        if not cleaned:
+                            return None
+                        if re.fullmatch(r"[A-Za-z]+", cleaned):
+                            return cleaned.upper()
+                        if cleaned.isdigit():
+                            idx = int(cleaned) - 1
+                            if idx < 0:
+                                raise ValueError("Column numbers must be >= 1")
+                            return column_index_to_letter(idx)
+                        headers = _ensure_headers()
+                        try:
+                            idx, _ = find_header_index(headers, cleaned, target_sheet)
+                            return column_index_to_letter(idx)
+                        except ValueError:
+                            return None
+                    return None
+
+                def _parse_range_columns(range_ref: str) -> tuple[str | None, str | None]:
+                    match = _A1_RANGE_RE.match(range_ref.replace(" ", ""))
+                    if not match:
+                        return None, None
+                    start_col = match.group("start_col")
+                    end_col = match.group("end_col") or start_col
+                    if start_col:
+                        start_col = start_col.upper()
+                    if end_col:
+                        end_col = end_col.upper()
+                    return start_col, end_col
+
+                array_range = adjusted_params.get("array_range")
+                if not array_range:
+                    raise ValueError("index_match requires 'array_range'")
+                start_col, end_col = _parse_range_columns(array_range)
+                single_column_array = bool(start_col and end_col and start_col == end_col)
+
+                if not adjusted_params.get("row_lookup_range"):
+                    row_lookup_alias = _coalesce_value([
+                        "row_lookup_column",
+                        "row_lookup_header",
+                        "match_column",
+                        "lookup_column",
+                        "row_column",
+                    ])
+                    row_letter = _column_letter_from_spec(row_lookup_alias) or (start_col or "A")
+                    adjusted_params["row_lookup_range"] = f"{row_letter}:{row_letter}"
+
+                if not adjusted_params.get("column_lookup_range"):
+                    column_lookup_alias = _coalesce_value([
+                        "column_lookup_column",
+                        "column_lookup_header",
+                        "return_column",
+                        "result_column",
+                        "column_header",
+                    ])
+                    column_letter = _column_letter_from_spec(column_lookup_alias)
+                    if column_letter:
+                        adjusted_params["column_lookup_range"] = f"{column_letter}1:{column_letter}1"
+                    else:
+                        start_letter = start_col or "A"
+                        end_letter = end_col or start_letter
+                        adjusted_params["column_lookup_range"] = f"{start_letter}1:{end_letter}1"
+                if single_column_array and not adjusted_params.get("column_lookup_value") and not adjusted_params.get("col_num"):
+                    adjusted_params["col_num"] = 1
+
                 value = index_match_lookup(
                     self.default_sheet_id,
                     target_sheet,
-                    params["array_range"],
-                    params.get("row_lookup_value"),
-                    params.get("row_lookup_range"),
-                    params.get("column_lookup_value"),
-                    params.get("column_lookup_range"),
-                    params.get("row_num"),
-                    params.get("col_num"),
-                    params.get("match_type", "exact"),
+                    adjusted_params["array_range"],
+                    adjusted_params.get("row_lookup_value"),
+                    adjusted_params.get("row_lookup_range"),
+                    adjusted_params.get("column_lookup_value"),
+                    adjusted_params.get("column_lookup_range"),
+                    adjusted_params.get("row_num"),
+                    adjusted_params.get("col_num"),
+                    adjusted_params.get("match_type", "exact"),
                 )
                 return f"✅ INDEX/MATCH result: {value}"
             elif func_name == "sumproduct":
@@ -1593,20 +1750,32 @@ User request: {user_prompt}
         successes = [entry for entry in execution_log if entry.get("status") == "success"]
         errors = [entry for entry in execution_log if entry.get("status") == "error"]
 
+        result_texts = [
+            entry.get("output")
+            for entry in successes
+            if isinstance(entry.get("output"), str) and entry.get("output").strip()
+        ]
+
         if errors:
             first_error = errors[0]
             step_number = first_error.get("step", "?")
             function_name = first_error.get("function") or "step"
             error_text = first_error.get("error") or first_error.get("output") or "an error occurred"
-            return (
+            base_message = (
                 f"Ran {len(successes)} of {total_steps} steps. "
                 f"Stopped at step {step_number} ({function_name}) because {error_text}."
             )
+            if result_texts:
+                return base_message + f" Last output: {result_texts[-1]}"
+            return base_message
 
         if total_steps == 0:
             return "No steps were required."
 
-        return f"Completed {total_steps} steps successfully."
+        summary = f"Completed {total_steps} steps successfully."
+        if result_texts:
+            return summary + f" {result_texts[-1]}"
+        return summary
 
     def _refresh_subsheet_cache(self):
         if not self.default_sheet_id:
